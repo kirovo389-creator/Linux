@@ -40,8 +40,10 @@ class ProotLinux(private val context: Context) {
         }
         if (!File(root, "root/.linux-ai-ready").exists()) {
             onProgress("Installing base Linux tools…")
-            runCommand("mkdir -p /workspace /root/.cache /tmp && touch /root/.linux-ai-ready", "/root", 90)
-            runCommand("apk update && apk add bash ca-certificates curl wget git python3 py3-pip nodejs npm tar xz zip unzip", "/root", 900)
+            runCommand("mkdir -p /workspace /root/.cache /tmp", "/root", 90)
+            val installResult = runCommand("apk update && apk add bash ca-certificates curl wget git python3 py3-pip nodejs npm tar xz zip unzip", "/root", 900)
+            if (!installResult.contains("[exit 0]")) error("Linux package installation failed: " + installResult.takeLast(3000))
+            runCommand("touch /root/.linux-ai-ready", "/root", 30)
         }
     }
 
