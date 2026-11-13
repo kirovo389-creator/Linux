@@ -20,6 +20,8 @@ This is NOT a hardware virtual machine and does not boot an independent Linux ke
 
 Android can still stop foreground services because of force-stop, severe memory pressure, OEM battery management, reboot or permission changes. No ordinary Android app can promise an uninterrupted ten-hour job against those system actions. Linux AI keeps a foreground notification and acquires a partial wake lock while a task is actively running, which uses battery and mobile data. Do not use Android Settings > Force stop if you expect a task to continue.
 
+**No Android root access is required.** The app stores the Linux root filesystem in its private app directory and launches it through PRoot. The `-0` option only emulates root identity inside that userspace; it does not grant Android superuser privileges, modify system partitions, or require Magisk. Alpine's `/bin/sh` is validated by actually launching it through PRoot, rather than checking it with Android's host-side `File.exists()` (which can incorrectly reject absolute symlinks in the guest rootfs).
+
 The rootfs remains installed after a task finishes. Exit stops the service but does not delete the sandbox. Uninstalling the app removes app-private files. A manual sandbox reset UI and automatic cleanup of the rootfs are not included in this initial release.
 
 ## Build
