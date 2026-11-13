@@ -11,7 +11,7 @@ import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.GZIPInputStream
+import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
