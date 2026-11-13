@@ -21,12 +21,13 @@ class ProotLinux(private val context: Context) {
     private val root = File(base, "rootfs")
     private val binDir = File(base, "bin")
     private val prootFile = File(binDir, "proot")
+    private val rootfsReady = File(base, "rootfs.ready")
     private val loaderFile = AtomicReference<File?>(null)
     private val http = OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS).build()
     @Volatile private var active: Process? = null
 
-    fun isInstalled() = File(root, "bin/sh").exists() && prootFile.canExecute()
+    fun isInstalled() = rootfsReady.isFile && prootFile.canExecute()
 
     suspend fun ensureInstalled(onProgress: (String) -> Unit) = withContext(Dispatchers.IO) {
         base.mkdirs(); binDir.mkdirs()
@@ -34,7 +35,7 @@ class ProotLinux(private val context: Context) {
             onProgress("Downloading Android PRoot runtime…")
             installProot()
         }
-        if (!File(root, "bin/sh").exists()) {
+        if (!rootfsReady.isFile) {
             onProgress("Downloading Alpine Linux ARM64 root filesystem…")
             installRootfs(onProgress)
         }
@@ -103,7 +104,9 @@ class ProotLinux(private val context: Context) {
             FileOutputStream(archive).use { out -> response.body?.byteStream()?.copyTo(out) ?: error("Empty Alpine archive") }
         }
         onProgress("Extracting Linux filesystem…")
-        root.mkdirs()
+        rootfsReady.delete()
+        if (root.exists() && !root.deleteRecursively()) error("Cannot clear incomplete Linux rootfs")
+        if (!root.mkdirs() && !root.isDirectory) error("Cannot create Linux rootfs directory")
         TarArchiveInputStream(GZIPInputStream(BufferedInputStream(archive.inputStream()))).use { tar ->
             while (true) {
                 val entry = tar.nextTarEntry ?: break
@@ -142,9 +145,30 @@ class ProotLinux(private val context: Context) {
             }
         }
         archive.delete()
-        if (!File(root, "bin/sh").exists()) error("Extracted rootfs is incomplete: /bin/sh missing")
+        // Do not use java.io.File.exists() for /bin/sh: Alpine may provide it as an
+        // absolute symlink (for example /bin/sh -> /bin/busybox). On Android that
+        // symlink is resolved against the host filesystem, not the PRoot root.
+        // The reliable check is to execute the shell through PRoot itself.
         File(root, "etc/resolv.conf").apply { parentFile?.mkdirs(); writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n") }
-        File(root, "etc/apk/repositories").writeText("https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n")
+        File(root, "etc/apk/repositories").apply { parentFile?.mkdirs(); writeText("https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n") }
+        verifyRootfsShell()
+        rootfsReady.writeText("ok\\n")
+    }
+
+    private fun verifyRootfsShell() {
+        val command = listOf(prootFile.absolutePath, "-0", "-r", root.absolutePath,
+            "/bin/sh", "-c", "echo __LINUXAI_ROOTFS_OK__")
+        val builder = ProcessBuilder(command).redirectErrorStream(true)
+        loaderFile.get()?.let { builder.environment()["PROOT_LOADER"] = it.absolutePath }
+        val process = builder.start()
+        val output = process.inputStream.bufferedReader().use { it.readText().take(4000) }
+        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            error("Linux rootfs shell check timed out. PRoot output: " + output)
+        }
+        if (process.exitValue() != 0 || !output.contains("__LINUXAI_ROOTFS_OK__")) {
+            error("Alpine rootfs was extracted but /bin/sh cannot run inside PRoot. Check the downloaded ARM64 rootfs and symlinks. PRoot output: " + output)
+        }
     }
 
     private fun compareVersions(a: String, b: String): Int {
