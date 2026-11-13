@@ -152,7 +152,7 @@ class ProotLinux(private val context: Context) {
         File(root, "etc/resolv.conf").apply { parentFile?.mkdirs(); writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n") }
         File(root, "etc/apk/repositories").apply { parentFile?.mkdirs(); writeText("https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n") }
         verifyRootfsShell()
-        rootfsReady.writeText("ok\\n")
+        rootfsReady.writeText("ok\n")
     }
 
     private fun verifyRootfsShell() {
