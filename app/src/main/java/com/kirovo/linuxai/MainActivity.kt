@@ -352,6 +352,7 @@ private fun SettingsDialog(config: ConfigStore, forceSetup: Boolean, onClose: ()
     )
 }
 
+@Composable
 private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Ink, unfocusedTextColor = Ink,
     focusedBorderColor = Accent, unfocusedBorderColor = Panel2,
